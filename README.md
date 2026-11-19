@@ -41,3 +41,5 @@ De browserinterface voor de pilot staat in runtime/. De oorspronkelijke React-on
 Openstaand voor de commerciële lancering zijn onder andere tweerichtingssynchronisatie, herinneringen, een afzenderdomein per ondernemer en betalingen.
 
 Het klantdashboard bevat een maandoverzicht, zoekbare boekingen, verplaatsen en annuleren, dienstbeheer, meerdere tijdblokken, datumuitzonderingen, een handmatige huisstijleditor en aanpasbare boekingsmailtekst. De homepage bevat een lokale interactieve voorbeelddemo. De eigen boekingspagina staat op /boeken?bedrijf=BEDRIJF. AI-generatie voor een wachtwoordaccount vereist een geverifieerd e-mailadres. Dezelfde geverifieerde eigenaar deelt het maandquotum. Configureer een HTTPS-adres en SMTP om verificatiemails te verzenden. Een nieuwe aanmelding roteert de werkruimtesleutel.
+
+Bij hosting op een IP-adres kun je BLENDBOOK_OAUTH_CALLBACK instellen op een HTTPS-domeinroute die naar /oauth/callback op dezelfde server verwijst. Registreer exact die callback bij beide providers. Het dashboard blijft bereikbaar op BLENDBOOK_PUBLIC_URL.

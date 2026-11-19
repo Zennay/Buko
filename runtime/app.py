@@ -5,6 +5,7 @@ import customer
 import design
 import argparse
 import hashlib
+from html import escape
 import json
 import os
 import re
@@ -156,11 +157,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def handle_request(self, post):
         u = urlsplit(self.path)
+        if not post and u.path=="/api/account/options":
+            return self.reply(200,{"emailLogin":all(os.getenv("BLENDBOOK_"+k) for k in ("PUBLIC_URL","SMTP_HOST","MAIL_FROM"))})
         if not post and u.path=="/oauth/callback":
             try:
                 with closing(connect()) as db,db:
                     calendars.finish(db,parse_qs(u.query))
-                return self.reply(200,b'Agenda gekoppeld. <a href="/admin">Terug naar het dashboard</a>',"text/html")
+                target=escape(os.getenv("BLENDBOOK_PUBLIC_URL","").rstrip("/")+"/admin#Integraties",quote=True)
+                return self.reply(200,f'Agenda gekoppeld. <a href="{target}">Terug naar het dashboard</a>'.encode(),"text/html")
             except (calendars.CalendarError,KeyError,ValueError):
                 return self.reply(400,{"error":"Koppeling niet afgerond. Probeer opnieuw vanuit het dashboard."})
         feed=re.fullmatch(r"/agenda/([a-z0-9-]{1,48})/([A-Za-z0-9_-]{43})\.ics",u.path)

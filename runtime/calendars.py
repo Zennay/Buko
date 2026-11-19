@@ -34,7 +34,7 @@ def settings(name):
         cipher=Fernet(os.environ["BLENDBOOK_TOKEN_KEY"].encode())
         base=os.environ["BLENDBOOK_PUBLIC_URL"].rstrip("/")
         if not base.startswith("https://"): raise ValueError()
-        return os.environ[prefix+"ID"],os.environ[prefix+"SECRET"],base+"/oauth/callback",cipher
+        return os.environ[prefix+"ID"],os.environ[prefix+"SECRET"],os.getenv("BLENDBOOK_OAUTH_CALLBACK") or base+"/oauth/callback",cipher
     except (ImportError,ValueError,KeyError) as err:
         raise CalendarError("De platformbeheerder moet de agendakoppeling configureren.") from err
 
