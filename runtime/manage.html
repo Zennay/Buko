@@ -1,0 +1,32 @@
+<!doctype html><html lang="nl"><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Beheer je afspraak · Blendbook</title>
+<style>body{max-width:600px;margin:8vh auto;padding:18px;font:17px/1.6 system-ui;color:#213f32;background:#f7f7ef}h1{font-family:Georgia}button,input,select{font:inherit;padding:8px;border:1px solid #a4b0a7;border-radius:7px}button{cursor:pointer}label{display:block;margin:12px 0}</style>
+<h1>Je afspraak</h1><p id="summary"></p><main hidden><button id="ical">Voeg toe aan agenda</button>
+<h2>Verplaatsen</h2><label>Nieuwe datum <input type="date" id="day"></label><label>Beschikbare tijden <select id="time"></select></label><button id="move" disabled>Afspraak verplaatsen</button>
+<h2>Annuleren</h2><button id="cancel">Annuleer afspraak</button></main><output aria-live="polite"></output>
+<script>
+const [shop,ref,key]=location.hash.slice(1).split('/'),api='/api/'+encodeURIComponent(shop)+'/';
+const el=id=>document.getElementById(id),status=document.querySelector('output'),main=document.querySelector('main');
+let booking,revision=0;
+async function request(action,data={},ics=false){
+ const r=await fetch(api+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ref,key,...data})});
+ if(!r.ok)throw Error((await r.json()).error);
+ return ics?r.blob():r.json();
+}
+function display(b){booking=b;el('summary').textContent=b.service+' · '+b.day+' · '+b.label+' (Nederlandse tijd)';main.hidden=false}
+function failed(e){status.textContent=e.message}
+request('customer').then(display).catch(failed);
+el('ical').onclick=async()=>{try{const url=URL.createObjectURL(await request('calendar',{},true));const a=document.createElement('a');a.href=url;a.download='afspraak.ics';a.click();setTimeout(()=>URL.revokeObjectURL(url),20000)}catch(e){failed(e)}};
+el('cancel').onclick=async()=>{if(!confirm('Wil je deze afspraak definitief annuleren?'))return;try{await request('cancel');main.hidden=true;el('summary').textContent='Je afspraak is geannuleerd.';status.textContent=''}catch(e){failed(e)}};
+el('day').onchange=async()=>{
+ const seq=++revision;el('move').disabled=true;el('time').replaceChildren();
+ try{const cfg=await (await fetch(api+'config')).json();
+ const index=cfg.showServices?cfg.services.findIndex(s=>s.name===booking.service):0;
+ if(index<0)throw Error('Deze dienst is gewijzigd. Neem contact op met het bedrijf.');
+ const r=await fetch(api+'slots?'+new URLSearchParams({day:el('day').value,service:index}));
+ const slots=await r.json();if(!r.ok)throw Error(slots.error);
+ if(seq!==revision)return;
+ slots.forEach(s=>el('time').add(new Option(s.label,s.start)));el('move').disabled=!slots.length;status.textContent=slots.length?'':'Geen vrije tijden voor deze dag.';
+ }catch(e){failed(e)}
+};
+el('move').onclick=async()=>{el('move').disabled=true;try{display(await request('move',{day:el('day').value,start:Number(el('time').value)}));el('time').replaceChildren();status.textContent='Je afspraak is verplaatst.'}catch(e){failed(e)}};
+</script></html>

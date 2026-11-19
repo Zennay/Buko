@@ -1,0 +1,13 @@
+[Unit]
+Description=Blendbook booking service
+After=network.target
+[Service]
+Type=simple
+WorkingDirectory=%h/blendbook-pilot
+EnvironmentFile=-%h/.config/blendbook/platform.env
+UMask=0077
+ExecStart=/usr/bin/python3 runtime/app.py --port 18786
+Restart=on-failure
+NoNewPrivileges=true
+[Install]
+WantedBy=default.target

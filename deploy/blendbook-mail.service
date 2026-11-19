@@ -1,0 +1,10 @@
+[Unit]
+Description=Verstuur uitgaande Blendbook-mail
+ConditionPathExists=%h/.config/blendbook/platform.env
+[Service]
+Type=oneshot
+WorkingDirectory=%h/blendbook-pilot
+EnvironmentFile=%h/.config/blendbook/platform.env
+UMask=0077
+ExecStart=/usr/bin/python3 runtime/app.py --deliver-mail
+NoNewPrivileges=true
