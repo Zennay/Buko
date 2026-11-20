@@ -58,16 +58,38 @@ function calendar(){const y=month.getFullYear(),m=month.getMonth(),start=new Dat
  for(let i=1;i<=new Date(y,m+1,0).getDate();i++){const date=[y,String(m+1).padStart(2,'0'),String(i).padStart(2,'0')].join('-'),count=state.bookings.filter(b=>b.day===date).length;const b=button(String(i)+(count?' •':''),()=>{selected=date;calendar()});b.title=count+' appointments';b.classList.toggle('selected',date===selected);grid.append(b)}
  $('selectedDay').textContent=new Date(selected+'T12:00').toLocaleDateString('en-GB',{day:'numeric',month:'long'});renderBookings($('dayBookings'),state.bookings.filter(b=>b.day===selected),true)}
 for(const [id,delta] of [['prev',-1],['next',1]])$(id).onclick=()=>{month=new Date(month.getFullYear(),month.getMonth()+delta,1);calendar()};
-function overview(){
+let agendaDay=today;
+function dateKey(d){return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
+function plusDays(date,amount){const d=new Date(date+'T12:00');d.setDate(d.getDate()+amount);return dateKey(d)}
+function agenda(){
+ const d=new Date(agendaDay+'T12:00'),start=plusDays(agendaDay,-((d.getDay()+6)%7)),end=plusDays(start,6);
+ const pretty=(value,options)=>new Date(value+'T12:00').toLocaleDateString('en-GB',options);
+ $('weekRange').textContent=pretty(start,{day:'numeric',month:'short'})+' – '+pretty(end,{day:'numeric',month:'short',year:'numeric'});
  const strip=$('weekStrip');strip.replaceChildren();
- for(let offset=0;offset<7;offset++){const date=new Date(today+'T12:00');date.setDate(date.getDate()+offset);
-  const key=[date.getFullYear(),String(date.getMonth()+1).padStart(2,'0'),String(date.getDate()).padStart(2,'0')].join('-'),count=state.bookings.filter(b=>b.day===key).length;
-  const b=button('',()=>{selected=key;month=new Date(date);calendar();nav('Calendar')});
-  b.setAttribute('aria-label',date.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+', '+count+' appointments');b.className='weekCell';b.classList.toggle('current',offset===0);b.append(make('small',date.toLocaleDateString('en-GB',{weekday:'short'})),make('strong',date.getDate()),make('span',count?String(count):'·'));strip.append(b);
+ for(let i=0;i<7;i++){
+  const date=plusDays(start,i),entries=state.bookings.filter(b=>b.day===date);
+  const b=button('',()=>{agendaDay=date;agenda()});b.className='weekCell';
+  b.setAttribute('aria-pressed',String(date===agendaDay));b.setAttribute('aria-label',pretty(date,{dateStyle:'full'})+', '+entries.length+' appointments');
+  if(date===today)b.setAttribute('aria-current','date');
+  b.append(make('small',pretty(date,{weekday:'short'})),make('strong',Number(date.slice(-2))));
+  const dot=make('i','');dot.className=entries.length?'hasBookings':'';b.append(dot);strip.append(b)
  }
- $('serviceSummary').textContent=state.config.showServices?state.config.services.map(s=>s.name).join(', '):'Single appointment type';$('hoursSummary').textContent=state.config.hours.filter(Boolean).length+' working days per week';const future=state.bookings.filter(b=>b.day>=today);$('stats').replaceChildren();
- for(const [label,count] of [['Today',future.filter(b=>b.day===today).length],['From today',future.length],['Services',state.config.showServices?state.config.services.length:1]]){const card=make('div',label);card.className='metric';card.append(make('strong',count));$('stats').append(card)}
- renderBookings($('upcoming'),future.slice(0,4));filter();calendar()}
+ const entries=state.bookings.filter(b=>b.day===agendaDay);
+ $('agendaDate').textContent=pretty(agendaDay,{weekday:'long',day:'numeric',month:'short'});
+ $('agendaCount').textContent=entries.length+' '+(entries.length===1?'appointment':'appointments');
+ const list=$('dayAgenda');list.replaceChildren();
+ if(!entries.length){const empty=make('div','');empty.className='emptyAgenda';const icon=make('span','');icon.className='emptyCalendar';icon.setAttribute('aria-hidden','true');empty.append(icon,make('strong','No appointments scheduled'));list.append(empty)}
+ for(const b of entries){const row=make('div','');row.className='agendaEvent';const info=make('div','');info.append(make('strong',b.service),make('small',b.name));row.append(make('time',b.label),info);list.append(row)}
+}
+for(const [id,offset] of [['weekBack',-7],['weekNext',7]])$(id).onclick=()=>{agendaDay=plusDays(agendaDay,offset);agenda()};
+$('weekToday').onclick=()=>{agendaDay=today;agenda()};
+function overview(){
+ agenda();
+ $('serviceSummary').textContent=state.config.showServices?state.config.services.map(s=>s.name).join(', '):'Single appointment type';
+ $('hoursSummary').textContent=state.config.hours.filter(Boolean).length+' working days per week';
+ const upcoming=state.bookings.filter(b=>b.day>=today).slice(0,4);renderBookings($('upcoming'),upcoming);if(!upcoming.length)$('upcoming').textContent='New bookings will appear here.';
+ filter();calendar()
+}
 async function reloadBookings(){state=await call('admin');overview()}
 function draft(){
  const services=[...$('serviceRows').children].map(row=>{const [name,duration,price]=row.querySelectorAll('input');return {name:name.value.trim(),duration:Number(duration.value),price:price.value.trim()}});
@@ -126,7 +148,7 @@ async function openWorkspace(){state=await call('admin');const c=state.config;
  for(const k of ['duration','windowSize','buffer','mailText'])$(k).value=c[k];for(const k of ['windows','showServices'])$(k).checked=c[k];toggle();
  $('serviceRows').replaceChildren();c.services.forEach(service);$('week').replaceChildren();days.forEach((d,i)=>weekDay(d,c.hours[i]));$('exceptions').replaceChildren();Object.entries({...c.overrides,...Object.fromEntries(c.closed.map(d=>[d,'']))}).sort().forEach(([date,h])=>exception(date,h));
  const theme=state.theme||{accent:'#294e39',background:'#ffffff',foreground:'#20362d',font:'inherit'};for(const k of ['accent','background','foreground','font'])$(k).value=theme[k];$('buttonLabel').value=c.buttonLabel||'Book appointment';$('successLabel').value=c.successLabel||'';publishedDraft=JSON.stringify(draft());updateEditor();mailPreview();
- const url=location.origin+'/book?bedrijf='+encodeURIComponent($('shop').value);$('booking').href=$('public').href=url;$('booking').textContent=url;$('public').textContent=url;
+ const url=location.origin+'/book?bedrijf='+encodeURIComponent($('shop').value);$('booking').href=$('public').href=url;$('booking').textContent=url;$('public').textContent=$('shop').value+' ↗';
  $('embed').textContent='<blendbook-form bedrijf="'+$('shop').value+'"></blendbook-form><script src="'+location.origin+'/widget.js" defer></script>';
  $('dateline').textContent=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});integrations();overview();nav(decodeURIComponent(location.hash.slice(1)));document.dispatchEvent(new Event('workspace-open'))}
 $('login').onsubmit=e=>{e.preventDefault();openWorkspace().catch(err=>$('loginError').textContent=err.message)};

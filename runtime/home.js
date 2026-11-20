@@ -1,5 +1,11 @@
-const day=document.querySelector('#day'), times=document.querySelector('#times'), preview=document.querySelector('#preview');
-for(let i=1;i<=5;i++){const d=new Date();d.setDate(d.getDate()+i);day.add(new Option(d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})))}
-function display(){times.replaceChildren();preview.textContent='Choose a time to try the demo.';
-for(const time of (day.selectedIndex%2?['10:00','11:30','15:00']:['09:00','10:30','14:00'])){const b=document.createElement('button');b.className='soft';b.textContent=time;b.onclick=()=>{for(const t of times.children)t.setAttribute('aria-pressed',String(t===b));preview.textContent='Sample appointment · '+day.value+' at '+time};times.append(b)}}
-day.onchange=display;display();document.querySelector('#paint').oninput=e=>document.querySelector('#demo').style.setProperty('--green',e.target.value);
+const examples=[
+ {name:'Studio session',duration:45,price:'',accent:'#6c51b4',surface:'#ffffff',host:'Studio Lumen'},
+ {name:'Discovery call',duration:30,price:'',accent:'#176e63',surface:'#fcfefc',host:'North Consulting'},
+ {name:'Home consultation',duration:60,price:'',accent:'#955735',surface:'#fffdfa',host:'Fieldwork'}
+];
+const widget=document.querySelector('#demoWidget'),tabs=[...document.querySelectorAll('#demoThemes button')];
+function showExample(index){
+ const sample=examples[index];tabs.forEach((tab,i)=>tab.setAttribute('aria-pressed',String(i===index)));
+ widget.renderPreview({previewHost:sample.host,services:[sample],duration:sample.duration,showServices:true,windows:index===2,theme:{accent:sample.accent,background:sample.surface,foreground:'#262728',buttonText:'#ffffff'},buttonLabel:'Confirm appointment',successLabel:'Preview complete. No appointment was booked.'});
+}
+tabs.forEach((tab,i)=>tab.onclick=()=>showExample(i));showExample(0);

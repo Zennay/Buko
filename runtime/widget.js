@@ -51,7 +51,7 @@
           for(const option of options){const b=document.createElement('button');b.type='button';b.textContent=option.label;b.onclick=()=>{slot=option;get('.summary').textContent=label(day,{dateStyle:'medium'})+' · '+slot.label;get('.schedule').hidden=true;form.hidden=false;select.disabled=true;form.elements.name.focus()};times.append(b)}
         }catch(e){if(ticket===seq)msg.textContent=e.message}
       }
-      function apply(c){config=c;form.hidden=true;get('.schedule').hidden=false;select.disabled=false;const t=c.theme||{},layout=get('.layout');
+      function apply(c){config=c;if(preview&&c.previewHost)get('.host').textContent=c.previewHost;form.hidden=true;get('.schedule').hidden=false;select.disabled=false;const t=c.theme||{},layout=get('.layout');
         for(const [property,value] of Object.entries({'--accent':t.accent,'--on':t.buttonText,'--surface':t.background,'--text':t.foreground}))if(value)layout.style.setProperty(property,value);
         layout.style.fontFamily=t.font||'inherit';select.replaceChildren();c.services.forEach((s,i)=>select.add(new Option(s.name,i)));
         get('.service').hidden=!c.showServices||c.services.length<=1;get('.primary').textContent=c.buttonLabel||'Book appointment';calendar();refresh()}
