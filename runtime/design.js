@@ -38,10 +38,9 @@
         Object.assign(card.style,{backgroundColor:theme.background,color:theme.foreground,fontFamily:theme.font,padding:'16px',borderRadius:'10px',margin:'8px 0'});
         name.textContent=theme.name;hint.textContent='Kennismaking · 30 minuten';
         sample.textContent='09:00　 10:30　 14:00';
-        apply.textContent=JSON.stringify(result.active)===JSON.stringify(theme)?'Gepubliceerd':'Deze variant publiceren';
-        apply.disabled=apply.textContent==='Gepubliceerd';
+        apply.textContent='Gebruik in formulier';
         Object.assign(apply.style,{backgroundColor:theme.accent,color:theme.buttonText});
-        apply.onclick=()=>run('publish',{batch:result.batch,index});
+        apply.onclick=()=>document.dispatchEvent(new CustomEvent('choose-theme',{detail:theme}));
         card.append(name,hint,sample,apply);choices.append(card);
       });
       output.textContent=result.pending?'Een generatie loopt. Vernieuw de ontwerpen over een moment.':

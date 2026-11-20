@@ -41,8 +41,9 @@
           msg.textContent=slots.length?'':'Geen tijden vrij. Kies een andere datum.';
         } catch(e) { if(current===revision) msg.textContent=e.message; }
       }
-      try {
-        const c=await request('config');
+      function applyConfig(c){
+        button.textContent=c.buttonLabel || 'Afspraak boeken';
+        fields.service.replaceChildren();
         if(c.theme){
           const t=c.theme;
           Object.assign(form.style,{backgroundColor:t.background,color:t.foreground,fontFamily:t.font,padding:'16px',borderRadius:'8px'});
@@ -53,6 +54,19 @@
         c.services.forEach((s,i)=>fields.service.add(new Option([s.name,s.duration+' min',s.price].filter(Boolean).join(' · '),i)));
         fields.day.min=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Amsterdam'}).format(new Date());
         fields.day.value=fields.day.min;
+      }
+      if(this.hasAttribute('preview')){
+        form.onsubmit=e=>e.preventDefault();
+        this.renderPreview=c=>{
+          applyConfig(c);
+          fields.start.replaceChildren(new Option(c.windows?'09:00–11:00':'09:00'));
+          button.disabled=false;
+        };
+        return;
+      }
+      try {
+        const c=await request('config');
+        applyConfig(c);
         fields.day.onchange=fields.service.onchange=refresh;
         await refresh();
         form.onsubmit=async event=>{
@@ -63,7 +77,7 @@
           try {
             const b=await request('book',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
             form.hidden=true;
-            msg.textContent='Geboekt voor '+b.day+' om '+b.label+'. Je boekingsnummer is '+b.reference+'. ';
+            msg.textContent=(c.successLabel?c.successLabel+' ':'')+'Geboekt voor '+b.day+' om '+b.label+'. Je boekingsnummer is '+b.reference+'. ';
             const link=document.createElement('a');
             link.href=origin+'/beheer-afspraak#'+[shop,b.reference,b.manageKey].map(encodeURIComponent).join('/');
             link.textContent='Beheer je afspraak of voeg deze toe aan je agenda';

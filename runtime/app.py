@@ -21,7 +21,7 @@ from zoneinfo import ZoneInfo
 HERE = Path(__file__).parent
 DB = os.getenv("BLENDBOOK_DB", "blendbook.sqlite3")
 ZONE = ZoneInfo("Europe/Amsterdam")
-DEFAULT = dict(showServices=True, windows=True, duration=30, buffer=0,
+DEFAULT = dict(buttonLabel='Afspraak boeken', successLabel='', showServices=True, windows=True, duration=30, buffer=0,
                services=[dict(name="Kennismaking", duration=30, price="Gratis")],
                overrides={}, mailText="", hours=["08:00-17:00"] * 5 + ["", ""], closed=[], windowSize=120)
 
@@ -63,6 +63,10 @@ def number(n, low, high):
     return n
 
 def validate(c):
+    for k,limit in (("buttonLabel",64),("successLabel",180)):
+        c.setdefault(k,DEFAULT[k])
+        if not isinstance(c[k],str) or len(c[k])>limit or (k=="buttonLabel" and not c[k].strip()):
+            raise ValueError("Controleer de formuliertekst.")
     for key in ("windows", "showServices"):
         if type(c[key]) is not bool:
             raise ValueError("Ongeldige instelling.")
@@ -254,12 +258,15 @@ class Handler(BaseHTTPRequestHandler):
                             return self.reply(405,{"error":"Ongeldige methode."})
                         if post:
                             c=validate(data)
+                            if "theme" in data:
+                                theme=design.manual(data["theme"])
+                                db.execute("INSERT OR REPLACE INTO published_design VALUES (?,?)",(shop,json.dumps(theme)))
                             db.execute("UPDATE shops SET config=? WHERE slug=?",(json.dumps(c),shop))
                             db.commit()
                         reservations=[dict(b) for b in db.execute("SELECT day,label,service,price,name,email,ref FROM bookings WHERE shop=? ORDER BY day,start",(shop,))]
                         return self.reply(200,dict(config=c,theme=design.active(db,shop),ready={key:all(os.getenv("BLENDBOOK_"+v) for v in variables) for key,variables in {"smtp":["SMTP_HOST","MAIL_FROM"],"google":["GOOGLE_ID","GOOGLE_SECRET","TOKEN_KEY","PUBLIC_URL"],"microsoft":["MICROSOFT_ID","MICROSOFT_SECRET","TOKEN_KEY","PUBLIC_URL"],"ai":["AI_KEY"]}.items()},bookings=reservations,calendars=[r[0] for r in db.execute("SELECT provider FROM calendars WHERE shop=?",(shop,))]))
                 if not post and action=="config":
-                    return self.reply(200,dict(theme=design.active(db,shop), **{k:c[k] for k in ("showServices","services","windows","duration")}))
+                    return self.reply(200,dict(theme=design.active(db,shop), **{k:c[k] for k in ("showServices","services","windows","duration","buttonLabel","successLabel")}))
                 if not post and action=="slots":
                     q=parse_qs(u.query)
                     return self.reply(200,slots(db,shop,c,q["day"][0],int(q.get("service",[0])[0]),external))
