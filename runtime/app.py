@@ -22,8 +22,8 @@ from zoneinfo import ZoneInfo
 HERE = Path(__file__).parent
 DB = os.getenv("BLENDBOOK_DB", "blendbook.sqlite3")
 ZONE = ZoneInfo("Europe/Amsterdam")
-DEFAULT = dict(buttonLabel='Afspraak boeken', successLabel='', showServices=True, windows=True, duration=30, buffer=0,
-               services=[dict(name="Kennismaking", duration=30, price="Gratis")],
+DEFAULT = dict(buttonLabel='Book appointment', successLabel='', showServices=True, windows=True, duration=30, buffer=0,
+               services=[dict(name="Introductory call", duration=30, price="Free")],
                overrides={}, mailText="", hours=["08:00-17:00"] * 5 + ["", ""], closed=[], windowSize=120)
 
 def connect():
@@ -48,34 +48,34 @@ def init():
 
 def minutes(t):
     if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", t):
-        raise ValueError("Gebruik tijden als 08:00.")
+        raise ValueError("Enter a time such as 08:00.")
     h, m = map(int, t.split(":"))
     return h*60+m
 
 def interval(value):
     start, end = map(minutes, value.split("-"))
     if end <= start:
-        raise ValueError("De eindtijd moet later zijn.")
+        raise ValueError("End time must be later than start time.")
     return start, end
 
 def number(n, low, high):
     if type(n) is not int or not low <= n <= high:
-        raise ValueError("Controleer de ingestelde minuten.")
+        raise ValueError("Check the duration in minutes.")
     return n
 
 def validate(c):
     for k,limit in (("buttonLabel",64),("successLabel",180)):
         c.setdefault(k,DEFAULT[k])
         if not isinstance(c[k],str) or len(c[k])>limit or (k=="buttonLabel" and not c[k].strip()):
-            raise ValueError("Controleer de formuliertekst.")
+            raise ValueError("Check the form text.")
     for key in ("windows", "showServices"):
         if type(c[key]) is not bool:
-            raise ValueError("Ongeldige instelling.")
+            raise ValueError("Invalid setting.")
     number(c["duration"], 5, 720)
     number(c["buffer"], 0, 180)
     number(c["windowSize"], 15, 720)
     if len(c["hours"]) != 7:
-        raise ValueError("Geef zeven weekdagen op.")
+        raise ValueError("Enter hours for all seven weekdays.")
     c.setdefault("overrides", {})
     c.setdefault("mailText", "")
     if not isinstance(c["mailText"],str) or len(c["mailText"])>2000 or len(c["overrides"])>366:
@@ -85,15 +85,15 @@ def validate(c):
     for h in filter(None, [*c["hours"], *c["overrides"].values()]):
         blocks = [interval(part.strip()) for part in h.split(",")]
         if any(current[0] < previous[1] for previous,current in zip(blocks,blocks[1:])):
-            raise ValueError("Tijdblokken overlappen of staan in de verkeerde volgorde.")
+            raise ValueError("Time blocks overlap or are out of order.")
     for day in c["closed"]:
         date.fromisoformat(day)
     if len(c["services"]) > 80 or (c["showServices"] and not c["services"]):
-        raise ValueError("Controleer je dienstenlijst.")
+        raise ValueError("Check the services list.")
     for s in c["services"]:
         number(s["duration"], 5, 720)
         if not str(s["name"]).strip() or not isinstance(s["price"], str):
-            raise ValueError("Controleer de dienstnaam en prijs.")
+            raise ValueError("Check the service name and price.")
     return {k:c[k] for k in DEFAULT}
 
 def clock(m):
@@ -107,10 +107,10 @@ def slots(db, shop, c, day, index, external=()):
     hours = c.get("overrides",{}).get(day,c["hours"][d.weekday()])
     if not hours:
         return []
-    service = dict(name="Afspraak", duration=c["duration"], price="")
+    service = dict(name="Appointment", duration=c["duration"], price="")
     if c["showServices"]:
         if not 0 <= index < len(c["services"]):
-            raise ValueError("Kies een dienst.")
+            raise ValueError("Select a service.")
         service = c["services"][index]
     busy = db.execute("SELECT occupied_start, occupied_end FROM bookings WHERE shop=? AND day=?", (shop,day)).fetchall()
     busy.extend(external)
@@ -168,33 +168,33 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 with closing(connect()) as db,db:
                     calendars.finish(db,parse_qs(u.query))
-                target=escape(os.getenv("BLENDBOOK_PUBLIC_URL","").rstrip("/")+"/admin#Integraties",quote=True)
-                return self.reply(200,f'Agenda gekoppeld. <a href="{target}">Terug naar het dashboard</a>'.encode(),"text/html")
+                target=escape(os.getenv("BLENDBOOK_PUBLIC_URL","").rstrip("/")+"/admin#Integrations",quote=True)
+                return self.reply(200,f'Calendar connected. <a href="{target}">Return to dashboard</a>'.encode(),"text/html")
             except (calendars.CalendarError,KeyError,ValueError):
-                return self.reply(400,{"error":"Koppeling niet afgerond. Probeer opnieuw vanuit het dashboard."})
+                return self.reply(400,{"error":"Connection incomplete. Try again from the dashboard."})
         feed=re.fullmatch(r"/agenda/([a-z0-9-]{1,48})/([A-Za-z0-9_-]{43})\.ics",u.path)
         if not post and feed:
             shop,key=feed.groups()
             with closing(connect()) as db:
                 row=db.execute("SELECT digest FROM calendar_feeds WHERE shop=?",(shop,)).fetchone()
                 if not row or not secrets.compare_digest(row[0],customer.digest(key)):
-                    return self.reply(404,{"error":"Agendalink ongeldig."})
+                    return self.reply(404,{"error":"Invalid calendar link."})
                 bookings=db.execute("SELECT * FROM bookings WHERE shop=? ORDER BY day,start",(shop,))
                 return self.reply(200,customer.calendar_export(bookings),"text/calendar")
-        files={"/":"book.html" if "bedrijf" in parse_qs(u.query) else "home.html","/boeken":"book.html","/ui.css":"ui.css","/dashboard.js":"dashboard.js","/home.js":"home.js","/admin":"admin.html","/aanmelden":"signup.html","/beheer-afspraak":"manage.html","/design.js":"design.js","/widget.js":"widget.js"}
+        files={"/book":"book.html","/signup":"signup.html","/manage":"manage.html","/":"book.html" if "bedrijf" in parse_qs(u.query) else "home.html","/boeken":"book.html","/ui.css":"ui.css","/dashboard.js":"dashboard.js","/home.js":"home.js","/admin":"admin.html","/aanmelden":"signup.html","/beheer-afspraak":"manage.html","/design.js":"design.js","/widget.js":"widget.js"}
         if not post and u.path in files:
             return self.reply(200,(HERE/files[u.path]).read_bytes(),"text/javascript" if u.path.endswith(".js") else "text/css" if u.path.endswith(".css") else "text/html")
         match = re.fullmatch(r"/api/([a-z0-9-]{1,48})/(config|slots|book|admin|design|generate|publish|customer|cancel|calendar|move|connect|disconnect|linkcalendar|unlinkcalendar|feed|theme|managecancel|managemove|verify)",u.path)
         account = re.fullmatch(r"/api/account/(start|finish|register|login)",u.path) if post else None
         if not match and not account:
-            return self.reply(404,{"error":"Onbekende pagina."})
+            return self.reply(404,{"error":"Page not found."})
         shop, action = match.groups() if match else ("",account[1])
         try:
             data={}
             if post:
                 size=int(self.headers.get("Content-Length","0"))
                 if not 0<size<=32768 or self.headers.get_content_type()!="application/json":
-                    return self.reply(400,{"error":"Ongeldige aanvraag."})
+                    return self.reply(400,{"error":"Invalid request."})
                 data=json.loads(self.rfile.read(size))
             with closing(connect()) as db, db:
                 external=[]
@@ -210,13 +210,13 @@ class Handler(BaseHTTPRequestHandler):
                     return self.reply(*result)
                 row=db.execute("SELECT * FROM shops WHERE slug=?",(shop,)).fetchone()
                 if not row:
-                    return self.reply(404,{"error":"Onbekend bedrijf."})
+                    return self.reply(404,{"error":"Workspace not found."})
                 c={**DEFAULT,**json.loads(row["config"])}
                 staff_change=action in ("managecancel","managemove")
                 if action in ("linkcalendar","unlinkcalendar","verify","theme","managecancel","managemove","admin","design","generate","publish","connect","disconnect","feed"):
                     token=self.headers.get("Authorization","").removeprefix("Bearer ")
                     if not secrets.compare_digest(hashlib.sha256(token.encode()).hexdigest(),row["secret"]):
-                        return self.reply(403,{"error":"Controleer de beheersleutel."})
+                        return self.reply(403,{"error":"Check your admin key."})
                     if post and action=="linkcalendar":
                         calendar_links.connect(db,shop,data["provider"],data["url"])
                         db.commit()
@@ -258,13 +258,13 @@ class Handler(BaseHTTPRequestHandler):
                         return self.reply(200,design.state(db,shop))
                     if action=="generate" and post:
                         if db.execute("SELECT 1 FROM passwords WHERE shop=?",(shop,)).fetchone() and not db.execute("SELECT 1 FROM members WHERE shop=?",(shop,)).fetchone():
-                            return self.reply(403,{"error":"Verifieer eerst je e-mailadres voor de maandelijkse AI-generatie."})
+                            return self.reply(403,{"error":"Verify your email before generating a monthly design."})
                         return self.reply(201,design.generate(db,shop,data["site"]))
                     if action=="publish" and post:
                         return self.reply(200,design.select(db,shop,data))
                     if not staff_change:
                         if action!="admin":
-                            return self.reply(405,{"error":"Ongeldige methode."})
+                            return self.reply(405,{"error":"Method not allowed."})
                         if post:
                             c=validate(data)
                             if "theme" in data:
@@ -283,27 +283,27 @@ class Handler(BaseHTTPRequestHandler):
                     name=data["name"].strip()
                     email=data["email"].strip()
                     if not 0<len(name)<=120 or len(email)>254 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+",email):
-                        raise ValueError("Vul je naam en e-mailadres in.")
+                        raise ValueError("Enter your name and email address.")
                     options=slots(db,shop,c,data["day"],int(data.get("service",0)),external)
                     chosen=next((s for s in options if s["start"]==data["start"]),None)
                     if not chosen:
-                        return self.reply(409,{"error":"Deze tijd is niet meer beschikbaar."})
+                        return self.reply(409,{"error":"This time is no longer available."})
                     ref=secrets.token_hex(8)
                     db.execute("INSERT INTO bookings VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                         (ref,shop,data["day"],chosen["start"],chosen["finish"],chosen["occupied_start"],chosen["occupied_end"],chosen["service"],chosen["price"],name,email,chosen["label"]))
                     key=customer.new_key(db,ref)
                     booked=customer.lookup(db,shop,ref,key)
-                    customer.notice(db,booked,"Afspraak bevestigd",key)
+                    customer.notice(db,booked,"Appointment confirmed",key)
                     db.commit()
                     return self.reply(201,dict(manageKey=key,reference=ref,day=data["day"],label=chosen["label"],service=chosen["service"]))
                 if post and action in ("customer","cancel","calendar","move"):
                     b=(db.execute("SELECT * FROM bookings WHERE shop=? AND ref=?",(shop,data["ref"])).fetchone() if staff_change else customer.lookup(db,shop,data["ref"],data["key"]))
                     if not b:
-                        return self.reply(404,{"error":"Deze beheerlink is ongeldig of de afspraak is geannuleerd."})
+                        return self.reply(404,{"error":"This link is invalid or the appointment has been cancelled."})
                     if action=="calendar":
                         return self.reply(200,customer.calendar_file(b),"text/calendar")
                     if action=="cancel":
-                        customer.notice(db,b,"Afspraak geannuleerd")
+                        customer.notice(db,b,"Appointment cancelled")
                         db.execute("DELETE FROM bookings WHERE ref=?",(b["ref"],))
                         db.execute("DELETE FROM customer_keys WHERE ref=?",(b["ref"],))
                         db.commit()
@@ -313,34 +313,34 @@ class Handler(BaseHTTPRequestHandler):
                         if c["showServices"]:
                             index=next((i for i,s in enumerate(c["services"]) if s["name"]==b["service"]),None)
                             if index is None:
-                                return self.reply(409,{"error":"Deze dienst is gewijzigd. Neem contact op met het bedrijf."})
+                                return self.reply(409,{"error":"This service has changed. Contact the business."})
                         else:
                             index=0
                         db.execute("DELETE FROM bookings WHERE ref=?",(b["ref"],))
                         option=next((s for s in slots(db,shop,c,data["day"],index,external) if s["start"]==data["start"]),None)
                         if not option:
                             db.rollback()
-                            return self.reply(409,{"error":"Deze tijd is niet beschikbaar."})
+                            return self.reply(409,{"error":"This time is unavailable."})
                         db.execute("INSERT INTO bookings VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                             (b["ref"],shop,data["day"],option["start"],option["finish"],option["occupied_start"],
                              option["occupied_end"],b["service"],b["price"],b["name"],b["email"],option["label"]))
                         b=(db.execute("SELECT * FROM bookings WHERE shop=? AND ref=?",(shop,data["ref"])).fetchone() if staff_change else customer.lookup(db,shop,data["ref"],data["key"]))
-                        customer.notice(db,b,"Afspraak verplaatst",data.get("key") if not staff_change else None)
+                        customer.notice(db,b,"Appointment rescheduled",data.get("key") if not staff_change else None)
                         db.commit()
                     return self.reply(200,{k:b[k] for k in ("ref","day","label","service","price")})
-                self.reply(405,{"error":"Ongeldige methode."})
+                self.reply(405,{"error":"Method not allowed."})
         except (calendars.CalendarError,calendar_links.CalendarLinkError) as err:
             self.reply(503,{"error":str(err)})
         except design.DesignError as err:
             self.reply(err.status,{"error":str(err)})
         except (ValueError,KeyError,TypeError,AttributeError,IndexError):
-            self.reply(400,{"error":"Controleer de ingevulde gegevens."})
+            self.reply(400,{"error":"Check the information you entered."})
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser()
     parser.add_argument("--create",metavar="BEDRIJF")
     parser.add_argument("--port",type=int,default=8787)
-    parser.add_argument("--owner",help="Gedeelde gebruikers-ID voor de maandlimiet")
+    parser.add_argument("--owner",help="Shared user ID for the monthly limit")
     parser.add_argument("--deliver-mail",action="store_true")
     args=parser.parse_args()
     init()
@@ -349,11 +349,11 @@ if __name__=="__main__":
             customer.deliver(db)
     elif args.create:
         if not re.fullmatch("[a-z0-9-]{1,48}",args.create):
-            parser.error("Gebruik kleine letters, cijfers en streepjes.")
+            parser.error("Use lowercase letters, numbers and hyphens.")
         token=secrets.token_urlsafe(32)
         with closing(connect()) as db, db:
             db.execute("INSERT INTO shops VALUES (?,?,?)",(args.create,hashlib.sha256(token.encode()).hexdigest(),json.dumps(DEFAULT)))
             db.execute("INSERT INTO design_owners VALUES (?,?)",(args.create,args.owner or args.create))
-        print("Beheersleutel:",token)
+        print("Admin key:",token)
     else:
         ThreadingHTTPServer(("127.0.0.1",args.port),Handler).serve_forever()

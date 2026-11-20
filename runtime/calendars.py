@@ -29,7 +29,7 @@ def install(db):
 
 def settings(name):
     if name not in PROVIDERS:
-        raise ValueError("Onbekende agendaprovider.")
+        raise ValueError("Unknown calendar provider.")
     prefix="BLENDBOOK_"+name.upper()+"_"
     try:
         from cryptography.fernet import Fernet
@@ -38,7 +38,7 @@ def settings(name):
         if not base.startswith("https://"): raise ValueError()
         return os.environ[prefix+"ID"],os.environ[prefix+"SECRET"],os.getenv("BLENDBOOK_OAUTH_CALLBACK") or base+"/oauth/callback",cipher
     except (ImportError,ValueError,KeyError) as err:
-        raise CalendarError("De platformbeheerder moet de agendakoppeling configureren.") from err
+        raise CalendarError("The platform administrator needs to configure this calendar connection.") from err
 
 def begin(db,shop,name):
     import base64
@@ -58,7 +58,7 @@ def request(url, data=None, headers=None):
         with urlopen(Request(url,data=data,headers=headers or {}),timeout=6) as response:
             return json.load(response)
     except Exception as err:
-        raise CalendarError("Agenda tijdelijk onbereikbaar. Probeer opnieuw of verbind de agenda opnieuw.") from err
+        raise CalendarError("Calendar temporarily unavailable. Try again or reconnect your calendar.") from err
 
 def token(name, **params):
     client,secret,_,_=settings(name)
@@ -68,14 +68,14 @@ def token(name, **params):
 def finish(db,q):
     state=db.execute("SELECT * FROM oauth_states WHERE state=? AND expires>?",(q["state"][0],time.time())).fetchone()
     if not state:
-        raise CalendarError("De koppelingslink is verlopen.")
+        raise CalendarError("This connection link has expired.")
     db.execute("DELETE FROM oauth_states WHERE state=?",(state["state"],))
     db.commit()
     name=state["provider"]
     _,_,redirect,cipher=settings(name)
     result=token(name,grant_type="authorization_code",code=q["code"][0],redirect_uri=redirect,code_verifier=state["verifier"])
     if not result.get("refresh_token"):
-        raise CalendarError("Offline toegang ontbreekt. Verbind de agenda opnieuw.")
+        raise CalendarError("Offline access is missing. Please reconnect your calendar.")
     db.execute("INSERT OR REPLACE INTO calendars VALUES (?,?,?)",(state["shop"],name,cipher.encrypt(result["refresh_token"].encode())))
     db.commit()
 
@@ -121,5 +121,5 @@ def times(db, shop, day):
                     return (stamp.astimezone(ZONE).replace(tzinfo=None)-start.replace(tzinfo=None)).total_seconds()/60
                 result.append((math.floor(offset(left)),math.ceil(offset(right))))
         except Exception as err:
-            raise CalendarError("Beschikbaarheid van de gekoppelde agenda kon niet worden bevestigd.") from err
+            raise CalendarError("Unable to verify availability in the connected calendar.") from err
     return result

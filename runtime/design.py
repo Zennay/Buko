@@ -64,7 +64,7 @@ def select(db, shop, data):
     snapshot = state(db, shop)
     index = data.get("index")
     if snapshot["batch"] != data.get("batch") or type(index) != int or not 0 <= index < len(snapshot["variants"]):
-        raise DesignError(409, "Haal je ontwerpvarianten opnieuw op.")
+        raise DesignError(409, "Reload your design options.")
     db.execute("INSERT OR REPLACE INTO published_design VALUES (?,?)",
                (shop, json.dumps(snapshot["variants"][index])))
     db.commit()
@@ -101,11 +101,11 @@ def read_site(url):
     for _ in range(4):
         u = urlsplit(url)
         if u.scheme != "https" or not u.hostname or u.username or u.password or u.port not in (443,None):
-            raise ValueError("Voer een openbaar HTTPS-adres in.")
+            raise ValueError("Enter a public HTTPS address.")
         host = u.hostname.encode("idna").decode()
         addresses = socket.getaddrinfo(host,443,type=socket.SOCK_STREAM)
         if not addresses or any(not ipaddress.ip_address(a[4][0]).is_global or ipaddress.ip_address(a[4][0]).is_multicast for a in addresses):
-            raise ValueError("Alleen openbare websites zijn toegestaan.")
+            raise ValueError("Only public websites are supported.")
         address = addresses[0]
         with socket.socket(*address[:3]) as sock:
             sock.settimeout(5)
@@ -120,11 +120,11 @@ def read_site(url):
                     url = urljoin(url,response.getheader("Location"))
                     continue
                 if response.status != 200:
-                    raise ValueError("Website is onbereikbaar.")
+                    raise ValueError("Website unavailable.")
                 return url,response.read(MAX_BYTES).decode("utf-8","replace")
             finally:
                 conn.close()
-    raise ValueError("Te veel doorverwijzingen.")
+    raise ValueError("Too many redirects.")
 
 
 def sample(url):
@@ -144,7 +144,7 @@ def sample(url):
 
 def provider(tokens, key):
     prompt = ("Create exactly three distinct, legible booking widget palettes using these sampled colors and fonts. "
-              "Return a JSON object with variants, an array of three objects with name (short Dutch label), "
+              "Return a JSON object with variants, an array of three objects with name (short English label), "
               "background, foreground, accent (six-digit hex) and font (inherit, system-ui, Georgia, Verdana or Arial). "
               "Foreground must contrast with background. The host site's typography is preferred. "
               "Data: "+json.dumps(tokens))
@@ -165,58 +165,58 @@ def luminance(color):
 
 def checked(items):
     if not isinstance(items,list) or len(items)!=3:
-        raise ValueError("Drie varianten vereist.")
+        raise ValueError("Three designs are required.")
     result = [manual(item) for item in items]
     if len({tuple(t[k] for k in FIELDS[1:]) for t in result})!=3:
-        raise ValueError("Varianten zijn identiek.")
+        raise ValueError("Designs must be distinct.")
     return result
 
 
 def generate(db, shop, url):
     key = os.getenv("BLENDBOOK_AI_KEY")
     if not key:
-        raise DesignError(503,"De platformbeheerder moet de AI-sleutel instellen.")
+        raise DesignError(503,"The platform administrator must configure an AI key.")
     if not isinstance(url,str) or len(url)>2000:
-        raise ValueError("Ongeldig websiteadres.")
+        raise ValueError("Invalid website address.")
     owner, month, nonce = owner_for(db,shop),period(),secrets.token_hex(16)
     db.execute("BEGIN IMMEDIATE")
     snap = state(db,shop)
     if snap["variants"] or snap["pending"]:
         db.rollback()
-        raise DesignError(409,"Deze maand is al een ontwerpserie gestart. Open de bestaande varianten.")
+        raise DesignError(409,"A design session has already started this month. Open your existing designs.")
     db.execute("INSERT OR REPLACE INTO design_batches VALUES (?,?,?,?,?,NULL)",
                (owner,month,nonce,time.time(),url))
     db.commit()
     try:
         styles=sample(url)
         if not any(styles.values()):
-            raise DesignError(422,"Geen kleuren of lettertypen gevonden op deze website.")
+            raise DesignError(422,"No colors or fonts were found on this website.")
         themes=checked(provider(styles,key))
         updated=db.execute("UPDATE design_batches SET variants=? WHERE owner=? AND month=? AND nonce=?",
                            (json.dumps(themes),owner,month,nonce))
         db.commit()
         if updated.rowcount!=1:
-            raise DesignError(409,"Open de nieuwste ontwerpserie.")
+            raise DesignError(409,"Open the latest design session.")
     except Exception as err:
         db.execute("DELETE FROM design_batches WHERE owner=? AND month=? AND nonce=? AND variants IS NULL",
                    (owner,month,nonce))
         db.commit()
         if isinstance(err,DesignError):
             raise
-        raise DesignError(502,"Website of AI-provider leverde geen bruikbare ontwerpen. Probeer opnieuw.") from err
+        raise DesignError(502,"The website or AI provider returned no usable designs. Please try again.") from err
     return state(db,shop)
 
 
 def manual(item):
     theme = {k:item[k] for k in FIELDS}
     if not isinstance(theme["name"],str) or not 1<=len(theme["name"])<=60 or theme["font"] not in FONTS:
-        raise ValueError("Ongeldig ontwerp.")
+        raise ValueError("Invalid design.")
     for k in ("background","foreground","accent"):
         if not re.fullmatch(r"#[a-fA-F0-9]{6}",theme[k]):
-            raise ValueError("Ongeldige kleur.")
+            raise ValueError("Invalid color.")
         theme[k]=theme[k].lower()
     bg,fg = sorted((luminance(theme["background"]),luminance(theme["foreground"])))
     if (fg+.05)/(bg+.05)<4.5:
-        raise ValueError("Onvoldoende tekstcontrast.")
+        raise ValueError("Insufficient text contrast.")
     theme["buttonText"] = "#000000" if luminance(theme["accent"])>.179 else "#ffffff"
     return theme

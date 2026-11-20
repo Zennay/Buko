@@ -1,15 +1,15 @@
-<!doctype html><html lang="nl"><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=referrer content=no-referrer><title>Werkruimte openen · Buko</title>
+<!doctype html><html lang="en"><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=referrer content=no-referrer><title>Open workspace · Buko</title>
 <link rel="stylesheet" href="/ui.css"><header class="top"><a class="brand" href="/"><i class="mark">b</i>Buko</a><a href="/admin">Dashboard</a></header>
-<main class="gate"><section class="panel"><h1 id="heading">Werkruimte maken</h1><form novalidate><label>Naam van je werkruimte<input name="shop" required autocapitalize="none" spellcheck="false" maxlength="80" placeholder="Bijvoorbeeld Studio Robin" autocomplete="username"></label><small>Deze naam komt in je boekingslink.</small><label id="passlabel">Wachtwoord (minimaal 12 tekens)<input name="password" type="password" required minlength="12" maxlength="160" autocomplete="new-password"></label><label hidden id="emaillabel">Zakelijk e-mailadres<input name="email" type="email" disabled></label><output id="formError" role="alert"></output><button id="submit">Werkruimte maken</button></form><div id="switches"><p><button class="soft" id="mode">Ik heb al een wachtwoord</button></p><details id="mailAccess" hidden><summary>Toegang via e-mail</summary><p>Voor werkruimtes die met een e-mailadres zijn aangemaakt.</p><button class="soft" id="emailMode">Gebruik e-mail</button></details></div>
-<button id="claim" hidden>Open mijn beheeromgeving</button><output aria-live="polite"></output></section></main>
+<main class="gate"><section class="panel"><h1 id="heading">Create workspace</h1><form novalidate><label>Workspace name<input name="shop" required autocapitalize="none" spellcheck="false" maxlength="80" placeholder="Example: Studio Robin" autocomplete="username"></label><small>This name appears in your booking link.</small><label id="passlabel">Password (at least 12 characters)<input name="password" type="password" required minlength="12" maxlength="160" autocomplete="new-password"></label><label hidden id="emaillabel">Work email<input name="email" type="email" disabled></label><output id="formError" role="alert"></output><button id="submit">Create workspace</button></form><div id="switches"><p><button class="soft" id="mode">I already have a password</button></p><details id="mailAccess" hidden><summary>Email sign-in</summary><p>For workspaces registered with an email address.</p><button class="soft" id="emailMode">Use email</button></details></div>
+<button id="claim" hidden>Open my dashboard</button><output aria-live="polite"></output></section></main>
 <script>
 const form=document.querySelector('form'),claim=document.querySelector('#claim'),msg=document.querySelector('output');
 fetch('/api/account/options').then(r=>r.json()).then(data=>{document.querySelector('#mailAccess').hidden=!data.emailLogin}).catch(()=>{});
 const key=location.hash.slice(1);
 let action=new URLSearchParams(location.search).has('login')?'login':'register';
-function mode(a){action=a;document.querySelector('#formError').textContent='';const email=a==='start',login=a==='login';form.password.disabled=email;form.email.disabled=!email;form.email.required=email;document.querySelector('#passlabel').hidden=email;document.querySelector('#emaillabel').hidden=!email;form.password.autocomplete=login?'current-password':'new-password';document.querySelector('#heading').textContent=document.querySelector('#submit').textContent=email?'Toegangslink aanvragen':login?'Inloggen':'Werkruimte maken';document.querySelector('#mode').textContent=login?'Nieuwe werkruimte maken':'Ik heb al een wachtwoord'}
+function mode(a){action=a;document.querySelector('#formError').textContent='';const email=a==='start',login=a==='login';form.password.disabled=email;form.email.disabled=!email;form.email.required=email;document.querySelector('#passlabel').hidden=email;document.querySelector('#emaillabel').hidden=!email;form.password.autocomplete=login?'current-password':'new-password';document.querySelector('#heading').textContent=document.querySelector('#submit').textContent=email?'Request sign-in link':login?'Sign in':'Create workspace';document.querySelector('#mode').textContent=login?'Create a new workspace':'I already have a password'}
 mode(action);document.querySelector('#mode').onclick=()=>mode(action==='login'?'register':'login');document.querySelector('#emailMode').onclick=()=>mode('start');
-if(key){document.querySelector('#switches').hidden=true;document.querySelector('#heading').textContent='Werkruimte openen';history.replaceState(null,'',location.pathname);form.hidden=true;claim.hidden=false;}
+if(key){document.querySelector('#switches').hidden=true;document.querySelector('#heading').textContent='Open workspace';history.replaceState(null,'',location.pathname);form.hidden=true;claim.hidden=false;}
 async function call(action,data){
  const res=await fetch('/api/account/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
  const b=await res.json();if(!res.ok)throw Error(b.error);return b;
@@ -25,9 +25,9 @@ form.onsubmit=async event=>{
  shop.value=workspaceCode(shop.value);
  errorBox.textContent='';
  function invalid(field,message){field.focus();errorBox.textContent=message;}
- if(!/^[a-z0-9-]{1,48}$/.test(shop.value))return invalid(shop,'Kies een bedrijfscode van 1 tot 48 tekens met letters, cijfers of streepjes.');
- if(!password.disabled && (password.value.length<12 || password.value.length>160))return invalid(password,'Gebruik een wachtwoord van 12 tot 160 tekens.');
- if(!email.disabled && !email.validity.valid)return invalid(email,'Vul een geldig e-mailadres in.');
+ if(!/^[a-z0-9-]{1,48}$/.test(shop.value))return invalid(shop,'Choose a workspace ID with 1–48 letters, numbers or hyphens.');
+ if(!password.disabled && (password.value.length<12 || password.value.length>160))return invalid(password,'Use a password with 12–160 characters.');
+ if(!email.disabled && !email.validity.valid)return invalid(email,'Enter a valid email address.');
  if(submitButton.disabled)return;
  submitButton.disabled=true;
  try{

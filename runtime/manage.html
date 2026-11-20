@@ -1,8 +1,8 @@
-<!doctype html><html lang="nl"><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Beheer je afspraak · Buko</title>
-<style>body{max-width:600px;margin:8vh auto;padding:18px;font:17px/1.6 system-ui;color:#213f32;background:#f7f7ef}h1{font-family:Georgia}button,input,select{font:inherit;padding:8px;border:1px solid #a4b0a7;border-radius:7px}button{cursor:pointer}label{display:block;margin:12px 0}</style>
-<h1>Je afspraak</h1><p id="summary"></p><main hidden><button id="ical">Voeg toe aan agenda</button>
-<h2>Verplaatsen</h2><label>Nieuwe datum <input type="date" id="day"></label><label>Beschikbare tijden <select id="time"></select></label><button id="move" disabled>Afspraak verplaatsen</button>
-<h2>Annuleren</h2><button id="cancel">Annuleer afspraak</button></main><output aria-live="polite"></output>
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Manage your appointment · Buko</title>
+<link rel="stylesheet" href="/ui.css"><body class="compact">
+<h1>Your appointment</h1><p id="summary"></p><main hidden><button id="ical">Add to calendar</button>
+<h2>Reschedule</h2><label>New date <input type="date" id="day"></label><label>Available times <select id="time"></select></label><button id="move" disabled>Reschedule appointment</button>
+<h2>Cancel</h2><button id="cancel">Cancel appointment</button></main><output aria-live="polite"></output>
 <script>
 const [shop,ref,key]=location.hash.slice(1).split('/'),api='/api/'+encodeURIComponent(shop)+'/';
 const el=id=>document.getElementById(id),status=document.querySelector('output'),main=document.querySelector('main');
@@ -12,21 +12,21 @@ async function request(action,data={},ics=false){
  if(!r.ok)throw Error((await r.json()).error);
  return ics?r.blob():r.json();
 }
-function display(b){booking=b;el('summary').textContent=b.service+' · '+b.day+' · '+b.label+' (Nederlandse tijd)';main.hidden=false}
+function display(b){booking=b;el('summary').textContent=b.service+' · '+b.day+' · '+b.label+' (Amsterdam time)';main.hidden=false}
 function failed(e){status.textContent=e.message}
 request('customer').then(display).catch(failed);
-el('ical').onclick=async()=>{try{const url=URL.createObjectURL(await request('calendar',{},true));const a=document.createElement('a');a.href=url;a.download='afspraak.ics';a.click();setTimeout(()=>URL.revokeObjectURL(url),20000)}catch(e){failed(e)}};
-el('cancel').onclick=async()=>{if(!confirm('Wil je deze afspraak definitief annuleren?'))return;try{await request('cancel');main.hidden=true;el('summary').textContent='Je afspraak is geannuleerd.';status.textContent=''}catch(e){failed(e)}};
+el('ical').onclick=async()=>{try{const url=URL.createObjectURL(await request('calendar',{},true));const a=document.createElement('a');a.href=url;a.download='appointment.ics';a.click();setTimeout(()=>URL.revokeObjectURL(url),20000)}catch(e){failed(e)}};
+el('cancel').onclick=async()=>{if(!confirm('Cancel this appointment?'))return;try{await request('cancel');main.hidden=true;el('summary').textContent='Your appointment has been cancelled.';status.textContent=''}catch(e){failed(e)}};
 el('day').onchange=async()=>{
  const seq=++revision;el('move').disabled=true;el('time').replaceChildren();
  try{const cfg=await (await fetch(api+'config')).json();
  const index=cfg.showServices?cfg.services.findIndex(s=>s.name===booking.service):0;
- if(index<0)throw Error('Deze dienst is gewijzigd. Neem contact op met het bedrijf.');
+ if(index<0)throw Error('This service has changed. Contact the business.');
  const r=await fetch(api+'slots?'+new URLSearchParams({day:el('day').value,service:index}));
  const slots=await r.json();if(!r.ok)throw Error(slots.error);
  if(seq!==revision)return;
- slots.forEach(s=>el('time').add(new Option(s.label,s.start)));el('move').disabled=!slots.length;status.textContent=slots.length?'':'Geen vrije tijden voor deze dag.';
+ slots.forEach(s=>el('time').add(new Option(s.label,s.start)));el('move').disabled=!slots.length;status.textContent=slots.length?'':'No times available on this day.';
  }catch(e){failed(e)}
 };
-el('move').onclick=async()=>{el('move').disabled=true;try{display(await request('move',{day:el('day').value,start:Number(el('time').value)}));el('time').replaceChildren();status.textContent='Je afspraak is verplaatst.'}catch(e){failed(e)}};
+el('move').onclick=async()=>{el('move').disabled=true;try{display(await request('move',{day:el('day').value,start:Number(el('time').value)}));el('time').replaceChildren();status.textContent='Your appointment has been rescheduled.'}catch(e){failed(e)}};
 </script></html>

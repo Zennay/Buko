@@ -30,7 +30,7 @@ def lookup(db, shop, ref, key):
     return row if row and secrets.compare_digest(row["digest"],digest(key)) else None
 
 def notice(db, booking, subject, key=None):
-    body=f'{booking["service"]}\n{booking["day"]} · {booking["label"]} (Nederlandse tijd)\nBoekingsnummer {booking["ref"]}'
+    body=f'{booking["service"]}\n{booking["day"]} · {booking["label"]} (Amsterdam time)\nBooking reference {booking["ref"]}'
     config=json.loads(db.execute("SELECT config FROM shops WHERE slug=?",(booking["shop"],)).fetchone()[0])
     extra=config.get("mailText","")
     for token,field in {"customer_name":"name","service_name":"service","booking_date":"day","booking_time":"label","booking_price":"price"}.items():
@@ -39,7 +39,7 @@ def notice(db, booking, subject, key=None):
         body+="\n\n"+extra
     base=os.environ.get("BLENDBOOK_PUBLIC_URL","").rstrip("/")
     if key and base.startswith("https://"):
-        body+=f'\n\nBeheer je afspraak: {base}/beheer-afspraak#{booking["shop"]}/{booking["ref"]}/{key}'
+        body+=f'\n\nManage your booking: {base}/manage#{booking["shop"]}/{booking["ref"]}/{key}'
     db.execute("INSERT INTO mail_queue(recipient,subject,body) VALUES (?,?,?)",(booking["email"],subject,body))
 
 def deliver(db):
@@ -82,7 +82,7 @@ def calendar_event(b):
            "UID:"+b["ref"]+"@blendbook","DTSTAMP:"+utc(datetime.now(timezone.utc)),
            "DTSTART:"+utc(midnight+timedelta(minutes=b["start"])),
            "DTEND:"+utc(midnight+timedelta(minutes=b["finish"])),
-           "SUMMARY:"+escape(b["service"]),"DESCRIPTION:"+escape(b["label"]+" (Nederlandse tijd)"),
+           "SUMMARY:"+escape(b["service"]),"DESCRIPTION:"+escape(b["label"]+" (Amsterdam time)"),
            "END:VEVENT"]
     folded=[]
     for line in lines:

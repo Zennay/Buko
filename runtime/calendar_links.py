@@ -29,7 +29,7 @@ def validate_url(provider,url):
     if (parts.scheme!="https" or parts.hostname not in HOSTS.get(provider,()) or
         parts.username or parts.password or parts.port not in (None,443) or
         parts.fragment or not parts.path.lower().endswith(".ics") or len(url)>4096):
-        raise CalendarLinkError("Plak de HTTPS-link naar het ICS-bestand van deze agendaprovider.")
+        raise CalendarLinkError("Paste the HTTPS link to the ICS file from this calendar provider.")
     return url
 
 def load_calendar(url):
@@ -66,7 +66,7 @@ def connect(db,shop,provider,url):
         busy(load_calendar(url),datetime.now(ZONE).date())
         encrypted=cipher().encrypt(url.encode())
     except Exception as err:
-        raise CalendarLinkError("Agenda niet leesbaar. Controleer de ICS-link en de deelinstellingen.") from err
+        raise CalendarLinkError("Unable to read this calendar. Check the ICS link and sharing settings.") from err
     db.execute("INSERT OR REPLACE INTO calendar_links VALUES (?,?,?)",(shop,provider,encrypted))
 
 def times(db,shop,day):
@@ -76,5 +76,5 @@ def times(db,shop,day):
             url=validate_url(provider,cipher().decrypt(encrypted).decode())
             result.extend(busy(load_calendar(url),day))
     except Exception as err:
-        raise CalendarLinkError("De gekoppelde agenda is tijdelijk onbereikbaar. Probeer het later opnieuw.") from err
+        raise CalendarLinkError("The connected calendar is temporarily unavailable. Please try again later.") from err
     return result

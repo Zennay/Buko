@@ -19,11 +19,11 @@ def install(db):
 def start(db, data, address, link_owner=False):
     base=os.getenv("BLENDBOOK_PUBLIC_URL","").rstrip("/")
     if not (urlsplit(base).scheme=="https" and os.getenv("BLENDBOOK_SMTP_HOST") and os.getenv("BLENDBOOK_MAIL_FROM")):
-        return 503,{"error":"Registratie opent zodra e-mail en het publieke adres zijn ingesteld."}
+        return 503,{"error":"Email registration is available once email delivery and the public URL are configured."}
     email=data["email"].strip().lower()
     shop=data["shop"].strip()
     if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+",email) or len(email)>254 or not re.fullmatch("[a-z0-9-]{1,48}",shop):
-        raise ValueError("Controleer bedrijfscode en e-mail.")
+        raise ValueError("Check the workspace ID and email address.")
     now=time.time()
     db.execute("DELETE FROM signup_links WHERE expires<?",(now,))
     db.execute("DELETE FROM mail_limits WHERE started<?",(now-3600,))
@@ -33,7 +33,7 @@ def start(db, data, address, link_owner=False):
         count=db.execute("SELECT count FROM mail_limits WHERE bucket=?",(hashed,)).fetchone()[0]
         if count>limit:
             db.commit()
-            return 429,{"error":"Probeer het over een uur opnieuw."}
+            return 429,{"error":"Try again in an hour."}
     existing=db.execute("SELECT m.email FROM shops s LEFT JOIN members m ON m.shop=s.slug WHERE s.slug=?",(shop,)).fetchone()
     if existing is None or existing[0]==email or (link_owner and existing[0] is None):
         key=secrets.token_urlsafe(32)
@@ -41,20 +41,20 @@ def start(db, data, address, link_owner=False):
             db.execute("INSERT INTO verification_links VALUES (?)",(digest(key),))
         db.execute("INSERT INTO signup_links VALUES (?,?,?,?)",(digest(key),shop,email,now+900))
         db.execute("INSERT INTO mail_queue(recipient,subject,body) VALUES (?,?,?)",
-                   (email,"Open je Blendbook-werkruimte","Deze link is 15 minuten geldig.\n"+base+"/aanmelden#"+key))
+                   (email,"Open your Buko workspace","This link is valid for 15 minutes.\n"+base+"/aanmelden#"+key))
     db.commit()
-    return 202,{"message":"Als de bedrijfscode beschikbaar is of bij dit e-mailadres hoort, ontvang je een toegangslink."}
+    return 202,{"message":"If this workspace is available or belongs to your email address, you will receive a sign-in link."}
 
 def finish(db,data,config):
     import json
     row=db.execute("SELECT * FROM signup_links WHERE digest=? AND expires>?",(digest(data["key"]),time.time())).fetchone()
     if not row:
-        return 410,{"error":"De toegangslink is verlopen of gebruikt."}
+        return 410,{"error":"This sign-in link has expired or has already been used."}
     shop,email=row["shop"],row["email"]
     existing=db.execute("SELECT m.email FROM shops s LEFT JOIN members m ON m.shop=s.slug WHERE s.slug=?",(shop,)).fetchone()
     linking=db.execute("SELECT 1 FROM verification_links WHERE digest=?",(row["digest"],)).fetchone()
     if existing is not None and existing[0]!=email and not (linking and existing[0] is None):
-        return 409,{"error":"Deze bedrijfscode is al in gebruik."}
+        return 409,{"error":"This workspace ID is already in use."}
     key=secrets.token_urlsafe(32)
     if existing is None:
         db.execute("INSERT INTO shops VALUES (?,?,?)",(shop,digest(key),json.dumps(config)))
@@ -82,20 +82,20 @@ def password_access(db, data, address, create, config):
     db.execute("DELETE FROM mail_limits WHERE bucket=? AND started<?",(bucket,now-600))
     db.execute("INSERT INTO mail_limits VALUES (?,?,1) ON CONFLICT(bucket) DO UPDATE SET count=count+1",(bucket,now))
     if db.execute("SELECT count FROM mail_limits WHERE bucket=?",(bucket,)).fetchone()[0]>40:
-        return 429,{"error":"Te veel pogingen. Probeer het over tien minuten opnieuw."}
+        return 429,{"error":"Too many attempts. Try again in ten minutes."}
     row=db.execute("SELECT salt,verifier FROM passwords WHERE shop=?",(shop,)).fetchone()
     salt=row[0] if row else secrets.token_bytes(16)
     verifier=hashlib.scrypt(password.encode(),salt=salt,n=32768,r=8,p=1,maxmem=64*1024*1024)
     token=secrets.token_urlsafe(32)
     if create:
         if db.execute("SELECT 1 FROM shops WHERE slug=?",(shop,)).fetchone():
-            return 409,{"error":"Deze bedrijfscode is bezet."}
+            return 409,{"error":"This workspace ID is taken."}
         db.execute("INSERT INTO shops VALUES (?,?,?)",(shop,digest(token),json.dumps(config)))
         db.execute("INSERT INTO passwords VALUES (?,?,?)",(shop,salt,verifier))
         db.execute("INSERT INTO design_owners VALUES (?,?)",(shop,shop))
     elif row and hmac.compare_digest(verifier,row[1]):
         db.execute("UPDATE shops SET secret=? WHERE slug=?",(digest(token),shop))
     else:
-        return 403,{"error":"Controleer de bedrijfscode en het wachtwoord."}
+        return 403,{"error":"Check your workspace ID and password."}
     db.commit()
     return 200,{"key":token,"shop":shop}
