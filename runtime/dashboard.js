@@ -55,7 +55,14 @@ function calendar(){const y=month.getFullYear(),m=month.getMonth(),start=new Dat
  for(let i=1;i<=new Date(y,m+1,0).getDate();i++){const date=[y,String(m+1).padStart(2,'0'),String(i).padStart(2,'0')].join('-'),count=state.bookings.filter(b=>b.day===date).length;const b=button(String(i)+(count?' •':''),()=>{selected=date;calendar()});b.title=count+' afspraken';b.classList.toggle('selected',date===selected);grid.append(b)}
  $('selectedDay').textContent=new Date(selected+'T12:00').toLocaleDateString('nl-NL',{day:'numeric',month:'long'});renderBookings($('dayBookings'),state.bookings.filter(b=>b.day===selected),true)}
 for(const [id,delta] of [['prev',-1],['next',1]])$(id).onclick=()=>{month=new Date(month.getFullYear(),month.getMonth()+delta,1);calendar()};
-function overview(){$('serviceSummary').textContent=state.config.showServices?state.config.services.map(s=>s.name).join(', '):'Eén afspraaktype';$('hoursSummary').textContent=state.config.hours.filter(Boolean).length+' dagen per week geopend';const future=state.bookings.filter(b=>b.day>=today);$('stats').replaceChildren();
+function overview(){
+ const strip=$('weekStrip');strip.replaceChildren();
+ for(let offset=0;offset<7;offset++){const date=new Date(today+'T12:00');date.setDate(date.getDate()+offset);
+  const key=[date.getFullYear(),String(date.getMonth()+1).padStart(2,'0'),String(date.getDate()).padStart(2,'0')].join('-'),count=state.bookings.filter(b=>b.day===key).length;
+  const b=button('',()=>{selected=key;month=new Date(date);calendar();nav('Kalender')});
+  b.setAttribute('aria-label',date.toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'})+', '+count+' afspraken');b.className='weekCell';b.classList.toggle('current',offset===0);b.append(make('small',date.toLocaleDateString('nl-NL',{weekday:'short'})),make('strong',date.getDate()),make('span',count?String(count):'·'));strip.append(b);
+ }
+ $('serviceSummary').textContent=state.config.showServices?state.config.services.map(s=>s.name).join(', '):'Eén afspraaktype';$('hoursSummary').textContent=state.config.hours.filter(Boolean).length+' dagen per week geopend';const future=state.bookings.filter(b=>b.day>=today);$('stats').replaceChildren();
  for(const [label,count] of [['Vandaag',future.filter(b=>b.day===today).length],['Vanaf vandaag',future.length],['Diensten',state.config.showServices?state.config.services.length:1]]){const card=make('div',label);card.className='metric';card.append(make('strong',count));$('stats').append(card)}
  renderBookings($('upcoming'),future.slice(0,4));filter();calendar()}
 async function reloadBookings(){state=await call('admin');overview()}
@@ -87,9 +94,29 @@ $('publishForm').onclick=async()=>{
 };
 function mailPreview(){$('mailPreview').textContent=$('mailText').value.replace(/\{\{(customer_name|service_name|booking_date|booking_time|booking_price)\}\}/g,(_,k)=>({customer_name:'Robin',service_name:'Kennismaking',booking_date:today,booking_time:'10:00',booking_price:'€ 30'})[k])||'Je bericht verschijnt hier.'}
 $('mailText').oninput=mailPreview;
-function integrations(){const box=$('providers');box.replaceChildren();for(const [id,label] of [['google','Google Calendar'],['microsoft','Microsoft Outlook']]){
- const linked=state.calendars.includes(id),row=make('div',''),desc=make('div','');row.className='row';desc.append(make('strong',label),make('small',linked?'Gekoppeld':state.ready[id]?'Beschikbaar':'Nog niet beschikbaar. De platformbeheerder moet deze koppeling activeren.'));row.append(desc);
- const b=button(linked?'Loskoppelen':'Koppelen',async()=>{const r=await call(linked?'disconnect':'connect',{provider:id});if(r.url)location.assign(r.url);else{state=await call('admin');integrations()}});if(linked||state.ready[id])row.append(b);box.append(row)}
+function integrations(){
+ const box=$('providers');box.replaceChildren();
+ for(const [id,label] of [['google','Google Agenda'],['microsoft','Microsoft Outlook']]){
+  const linked=state.calendars.includes(id),subscribed=state.calendarLinks.includes(id);
+  const card=make('article','');card.className='providerCard';
+  const head=make('div','');head.className='providerHead';
+  const mark=make('span',id==='google'?'31':'O');mark.className='providerMark '+id;
+  const title=make('div','');title.append(make('strong',label),make('small',linked?'Verbonden via OAuth':subscribed?'Agendalink actief':'Beschikbaarheid koppelen'));head.append(mark,title);card.append(head);
+  if(linked||state.ready[id])card.append(button(linked?'OAuth loskoppelen':'Inloggen bij '+label,async()=>{
+   const r=await call(linked?'disconnect':'connect',{provider:id});if(r.url)location.assign(r.url);else{state=await call('admin');integrations()}
+  }));
+  if(subscribed)card.append(button('Agendalink loskoppelen',async()=>{await call('unlinkcalendar',{provider:id});state=await call('admin');integrations();feedback('Agendalink verwijderd.')}));
+  else{
+   const exp=make('details','');exp.append(make('summary','Koppelen met agendalink'));
+   const hint=id==='google'?'Open de instellingen van je Google-agenda. Kopieer bij Agenda integreren het geheime adres in iCal-indeling.':'Ga in Outlook op het web naar Agenda → Gedeelde agenda’s. Publiceer de agenda en kopieer de ICS-link.';
+   const form=make('form',''),input=field('ICS-link','url',''),status=make('output','');status.setAttribute('role','status');input.lastChild.required=true;input.lastChild.autocomplete='off';input.lastChild.placeholder='https://…';
+   const submit=make('button','Koppel agenda');form.append(make('p',hint),input,submit,status);
+   form.onsubmit=async event=>{event.preventDefault();submit.disabled=true;status.textContent='Agenda controleren…';try{await call('linkcalendar',{provider:id,url:input.lastChild.value});state=await call('admin');integrations();feedback(label+' gekoppeld. Bezette momenten worden geblokkeerd.')}catch(err){status.textContent=err.message;submit.disabled=false}};
+   exp.append(form);card.append(exp);
+  }
+  if(!linked&&!state.ready[id])card.append(make('small','Inloggen via OAuth is nog niet geactiveerd.'));
+  box.append(card);
+ }
  $('smtp').textContent=state.ready.smtp?'SMTP ingesteld. De mailworker verwerkt de wachtrij.':'SMTP is nog niet ingesteld. Berichten worden in de wachtrij bewaard.'}
 async function openWorkspace(){state=await call('admin');const c=state.config;
  sessionStorage.setItem('blendbook-login',JSON.stringify({shop:$('shop').value,key:$('key').value}));$('gate').hidden=true;document.querySelector('main').hidden=false;$('logout').hidden=false;$('workspace').textContent=$('shop').value;

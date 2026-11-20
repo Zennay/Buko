@@ -10,7 +10,7 @@
         form{max-width:560px;display:grid;gap:16px}label{display:grid;gap:5px}
         button,select,input{border:1px solid #a9b8b0;border-radius:8px;padding:11px;font:inherit}
         button{background:var(--ink);color:white;cursor:pointer}button:disabled{opacity:.5}
-        output{line-height:1.5} [hidden]{display:none}
+        *{box-sizing:border-box}form{gap:14px}label{font-size:.92em;font-weight:600;gap:6px}button,select,input{width:100%;min-width:0;border-radius:10px;border-color:#c7c5d1;padding:11px 12px;line-height:1.35}input,select{background:white;color:#252335}button{font-weight:650;border:0}input:focus-visible,select:focus-visible,button:focus-visible{outline:3px solid currentColor;outline-offset:2px}output{line-height:1.5} [hidden]{display:none}
       </style><form><label class="service">Dienst<select name="service"></select></label>
       <label>Datum<input required type="date" name="day"></label>
       <label><span class="mode">Tijd</span><select required name="start"></select></label>

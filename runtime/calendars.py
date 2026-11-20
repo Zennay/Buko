@@ -1,4 +1,5 @@
 """Read connected Google and Microsoft primary calendars before offering a slot."""
+import calendar_links
 import hashlib
 import json
 import math
@@ -20,6 +21,7 @@ class CalendarError(Exception):
     pass
 
 def install(db):
+    calendar_links.install(db)
     db.executescript("""
       CREATE TABLE IF NOT EXISTS oauth_states(state TEXT PRIMARY KEY,shop TEXT,provider TEXT,expires REAL,verifier TEXT);
       CREATE TABLE IF NOT EXISTS calendars(shop TEXT,provider TEXT,refresh BLOB,PRIMARY KEY(shop,provider));
@@ -82,7 +84,7 @@ def times(db, shop, day):
     start=datetime.combine(d,datetime.min.time(),ZONE)
     end=start+timedelta(days=1)
     if d<datetime.now(ZONE).date() or d>datetime.now(ZONE).date()+timedelta(days=365):return []
-    result=[]
+    result=calendar_links.times(db,shop,d)
     rows=db.execute("SELECT provider,refresh FROM calendars WHERE shop=?",(shop,)).fetchall()
     for name,old in rows:
         _,_,_,cipher=settings(name)

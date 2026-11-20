@@ -1,5 +1,6 @@
 """Blendbook booking server. Run with Python 3.10+."""
 import calendars
+import calendar_links
 import signup
 import customer
 import design
@@ -183,7 +184,7 @@ class Handler(BaseHTTPRequestHandler):
         files={"/":"book.html" if "bedrijf" in parse_qs(u.query) else "home.html","/boeken":"book.html","/ui.css":"ui.css","/dashboard.js":"dashboard.js","/home.js":"home.js","/admin":"admin.html","/aanmelden":"signup.html","/beheer-afspraak":"manage.html","/design.js":"design.js","/widget.js":"widget.js"}
         if not post and u.path in files:
             return self.reply(200,(HERE/files[u.path]).read_bytes(),"text/javascript" if u.path.endswith(".js") else "text/css" if u.path.endswith(".css") else "text/html")
-        match = re.fullmatch(r"/api/([a-z0-9-]{1,48})/(config|slots|book|admin|design|generate|publish|customer|cancel|calendar|move|connect|disconnect|feed|theme|managecancel|managemove|verify)",u.path)
+        match = re.fullmatch(r"/api/([a-z0-9-]{1,48})/(config|slots|book|admin|design|generate|publish|customer|cancel|calendar|move|connect|disconnect|linkcalendar|unlinkcalendar|feed|theme|managecancel|managemove|verify)",u.path)
         account = re.fullmatch(r"/api/account/(start|finish|register|login)",u.path) if post else None
         if not match and not account:
             return self.reply(404,{"error":"Onbekende pagina."})
@@ -200,7 +201,7 @@ class Handler(BaseHTTPRequestHandler):
                 if action in ("book","move","slots"):
                     day=data.get("day") if post else parse_qs(u.query).get("day",[""])[0]
                     external=calendars.times(db,shop,day)
-                if post and action not in ("generate","managemove"):
+                if post and action not in ("generate","managemove","linkcalendar"):
                     db.execute("BEGIN IMMEDIATE")
                 if account:
                     if action in ("register","login"):
@@ -212,10 +213,18 @@ class Handler(BaseHTTPRequestHandler):
                     return self.reply(404,{"error":"Onbekend bedrijf."})
                 c={**DEFAULT,**json.loads(row["config"])}
                 staff_change=action in ("managecancel","managemove")
-                if action in ("verify","theme","managecancel","managemove","admin","design","generate","publish","connect","disconnect","feed"):
+                if action in ("linkcalendar","unlinkcalendar","verify","theme","managecancel","managemove","admin","design","generate","publish","connect","disconnect","feed"):
                     token=self.headers.get("Authorization","").removeprefix("Bearer ")
                     if not secrets.compare_digest(hashlib.sha256(token.encode()).hexdigest(),row["secret"]):
                         return self.reply(403,{"error":"Controleer de beheersleutel."})
+                    if post and action=="linkcalendar":
+                        calendar_links.connect(db,shop,data["provider"],data["url"])
+                        db.commit()
+                        return self.reply(200,{"connected":True})
+                    if post and action=="unlinkcalendar":
+                        db.execute("DELETE FROM calendar_links WHERE shop=? AND provider=?",(shop,data["provider"]))
+                        db.commit()
+                        return self.reply(200,{"removed":True})
                     if action=="verify" and post:
                         return self.reply(*signup.start(db,{"shop":shop,"email":data["email"]},self.client_address[0],True))
                     if staff_change and post:
@@ -264,7 +273,7 @@ class Handler(BaseHTTPRequestHandler):
                             db.execute("UPDATE shops SET config=? WHERE slug=?",(json.dumps(c),shop))
                             db.commit()
                         reservations=[dict(b) for b in db.execute("SELECT day,label,service,price,name,email,ref FROM bookings WHERE shop=? ORDER BY day,start",(shop,))]
-                        return self.reply(200,dict(config=c,theme=design.active(db,shop),ready={key:all(os.getenv("BLENDBOOK_"+v) for v in variables) for key,variables in {"smtp":["SMTP_HOST","MAIL_FROM"],"google":["GOOGLE_ID","GOOGLE_SECRET","TOKEN_KEY","PUBLIC_URL"],"microsoft":["MICROSOFT_ID","MICROSOFT_SECRET","TOKEN_KEY","PUBLIC_URL"],"ai":["AI_KEY"]}.items()},bookings=reservations,calendars=[r[0] for r in db.execute("SELECT provider FROM calendars WHERE shop=?",(shop,))]))
+                        return self.reply(200,dict(config=c,calendarLinks=[r[0] for r in db.execute("SELECT provider FROM calendar_links WHERE shop=?",(shop,))],theme=design.active(db,shop),ready={key:all(os.getenv("BLENDBOOK_"+v) for v in variables) for key,variables in {"smtp":["SMTP_HOST","MAIL_FROM"],"google":["GOOGLE_ID","GOOGLE_SECRET","TOKEN_KEY","PUBLIC_URL"],"microsoft":["MICROSOFT_ID","MICROSOFT_SECRET","TOKEN_KEY","PUBLIC_URL"],"ai":["AI_KEY"]}.items()},bookings=reservations,calendars=[r[0] for r in db.execute("SELECT provider FROM calendars WHERE shop=?",(shop,))]))
                 if not post and action=="config":
                     return self.reply(200,dict(theme=design.active(db,shop), **{k:c[k] for k in ("showServices","services","windows","duration","buttonLabel","successLabel")}))
                 if not post and action=="slots":
@@ -320,7 +329,7 @@ class Handler(BaseHTTPRequestHandler):
                         db.commit()
                     return self.reply(200,{k:b[k] for k in ("ref","day","label","service","price")})
                 self.reply(405,{"error":"Ongeldige methode."})
-        except calendars.CalendarError as err:
+        except (calendars.CalendarError,calendar_links.CalendarLinkError) as err:
             self.reply(503,{"error":str(err)})
         except design.DesignError as err:
             self.reply(err.status,{"error":str(err)})
